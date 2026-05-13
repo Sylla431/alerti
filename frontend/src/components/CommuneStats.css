@@ -1,0 +1,131 @@
+.commune-stats-container {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.commune-stats-container h3 {
+  margin: 0 0 20px 0;
+  font-size: 1.3em;
+  color: #333;
+  font-weight: 600;
+}
+
+.commune-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.commune-stat-card {
+  background: #F9F9F9;
+  border-radius: 12px;
+  padding: 20px;
+  border: 2px solid #E0E0E0;
+  transition: all 0.3s ease;
+}
+
+.commune-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  border-color: #2196F3;
+}
+
+.commune-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #E0E0E0;
+}
+
+.commune-header h4 {
+  margin: 0;
+  font-size: 1.2em;
+  color: #333;
+  font-weight: 600;
+}
+
+.commune-risk-badge {
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.commune-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.metric-label {
+  font-size: 0.9em;
+  color: #666;
+}
+
+.metric-value {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+}
+
+.commune-risk-breakdown {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #E0E0E0;
+}
+
+.risk-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  background: #E0E0E0;
+}
+
+.risk-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.risk-legend {
+  display: flex;
+  justify-content: space-around;
+  font-size: 0.8em;
+  color: #666;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.risk-legend span {
+  white-space: nowrap;
+}
+
+.commune-stats-empty {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .commune-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

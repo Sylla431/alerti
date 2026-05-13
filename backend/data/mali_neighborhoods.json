@@ -1,0 +1,109 @@
+{
+  "mali_bamako": {
+    "neighborhoods": [
+      {
+        "name": "Commune I",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.65,
+          "lon": -8.0
+        },
+        "type": "commune"
+      },
+      {
+        "name": "Commune II",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.64,
+          "lon": -8.0
+        },
+        "type": "commune"
+      },
+      {
+        "name": "Commune III",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.63,
+          "lon": -8.0
+        },
+        "type": "commune"
+      },
+      {
+        "name": "Commune IV",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.62,
+          "lon": -8.0
+        },
+        "type": "commune"
+      },
+      {
+        "name": "Commune V",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.61,
+          "lon": -8.0
+        },
+        "type": "commune"
+      },
+      {
+        "name": "Commune VI",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.60,
+          "lon": -8.0
+        },
+        "type": "commune"
+      },
+      {
+        "name": "Badalabougou",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.65,
+          "lon": -7.98
+        },
+        "type": "neighbourhood"
+      },
+      {
+        "name": "Aci 2000",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.64,
+          "lon": -7.99
+        },
+        "type": "neighbourhood"
+      },
+      {
+        "name": "Hamdallaye",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.63,
+          "lon": -8.01
+        },
+        "type": "neighbourhood"
+      },
+      {
+        "name": "Niaréla",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.62,
+          "lon": -8.02
+        },
+        "type": "neighbourhood"
+      },
+      {
+        "name": "Quartier du Fleuve",
+        "city": "Bamako",
+        "coordinates": {
+          "lat": 12.61,
+          "lon": -8.03
+        },
+        "type": "neighbourhood"
+      }
+    ],
+    "last_updated": "2025-01-01T00:00:00",
+    "city": "Bamako",
+    "count": 11
+  }
+}
+

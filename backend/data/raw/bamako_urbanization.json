@@ -1,0 +1,68 @@
+[
+  {
+    "commune": "Commune I",
+    "area_km2": 7.213010901785435,
+    "num_buildings": 6140,
+    "building_area_km2": 0.8649854310190424,
+    "building_density_pct": 11.992016133026121,
+    "impermeable_surface_pct": 15.589620972933957,
+    "num_drains": 10,
+    "drainage_length_km": 3.2227872046658845,
+    "drainage_density": 0.4468019317519884
+  },
+  {
+    "commune": "Commune II",
+    "area_km2": 4.808956438100541,
+    "num_buildings": 3746,
+    "building_area_km2": 0.6269566639731788,
+    "building_density_pct": 13.03727060211875,
+    "impermeable_surface_pct": 16.948451782754375,
+    "num_drains": 11,
+    "drainage_length_km": 6.384775949211017,
+    "drainage_density": 1.3276842972886023
+  },
+  {
+    "commune": "Commune III",
+    "area_km2": 4.809332596821351,
+    "num_buildings": 0,
+    "building_area_km2": 0,
+    "building_density_pct": 0,
+    "impermeable_surface_pct": 0.0,
+    "num_drains": 11,
+    "drainage_length_km": 7.502309810758852,
+    "drainage_density": 1.559948217288482
+  },
+  {
+    "commune": "Commune IV",
+    "area_km2": 7.213010901785435,
+    "num_buildings": 5930,
+    "building_area_km2": 0.534481720591053,
+    "building_density_pct": 7.409966903817557,
+    "impermeable_surface_pct": 9.632956974962823,
+    "num_drains": 12,
+    "drainage_length_km": 8.185145908083301,
+    "drainage_density": 1.1347752026906315
+  },
+  {
+    "commune": "Commune V",
+    "area_km2": 4.809708169539145,
+    "num_buildings": 0,
+    "building_area_km2": 0,
+    "building_density_pct": 0,
+    "impermeable_surface_pct": 0.0,
+    "num_drains": 10,
+    "drainage_length_km": 1.1736835293454728,
+    "drainage_density": 0.24402385508098975
+  },
+  {
+    "commune": "Commune VI",
+    "area_km2": 7.2141398174106035,
+    "num_buildings": 7932,
+    "building_area_km2": 0.8300215275823901,
+    "building_density_pct": 11.505481576323435,
+    "impermeable_surface_pct": 14.957126049220467,
+    "num_drains": 1,
+    "drainage_length_km": 0.47343831282803267,
+    "drainage_density": 0.06562643985433118
+  }
+]

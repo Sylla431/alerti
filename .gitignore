@@ -1,0 +1,91 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+env/
+ENV/
+.venv
+# Mais garder venv/ dans ce cas (décommenter si besoin)
+# !venv/.gitkeep
+
+# Flask
+instance/
+.webassets-cache
+
+# Environment variables
+.env
+.env.local
+
+# Models
+backend/models/*.h5
+backend/models/*.pkl
+backend/models/*.hdf5
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Coverage
+coverage/
+*.coverage
+
+# Data
+backend/data/historical_data/*.csv
+backend/data/historical_data/*.nc
+backend/data/historical_data/*.netcdf
+
+# Raw data downloads (trop volumineux pour git)
+backend/data/raw/chirps/*.tif
+backend/data/raw/sentinel/*.zip
+backend/data/raw/sentinel/*.tif
+backend/data/raw/sentinel/*.SAFE/
+
+# Training data (gros fichiers numpy)
+backend/data/training/lstm/*.npy
+backend/data/training/cnn/*.npy
+
+# CSV extraits (peuvent être régénérés)
+backend/data/chirps_mali_*.csv
+backend/data/mali_weather_complete.csv
+

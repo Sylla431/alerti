@@ -1,0 +1,60 @@
+.trend-chart-container {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.chart-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #E0E0E0;
+}
+
+.chart-header h3 {
+  margin: 0 0 5px 0;
+  font-size: 1.3em;
+  color: #333;
+  font-weight: 600;
+}
+
+.chart-subtitle {
+  margin: 0;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.trend-chart-empty {
+  background: white;
+  border-radius: 16px;
+  padding: 60px 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.trend-chart-empty p {
+  margin: 10px 0;
+  color: #999;
+  font-size: 1.1em;
+}
+
+.empty-hint {
+  font-size: 0.9em !important;
+  color: #BBB !important;
+}
+
+.chart-info {
+  margin-top: 15px;
+  padding: 15px;
+  background: #F5F5F5;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.chart-info p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9em;
+}
+

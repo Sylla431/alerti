@@ -1,0 +1,26 @@
+{
+  "Commune I": {
+    "elevation": 339.0,
+    "slope": 3.186241824157815
+  },
+  "Commune II": {
+    "elevation": 329.0,
+    "slope": 1.809233756874194
+  },
+  "Commune III": {
+    "elevation": 325.0,
+    "slope": 0.9574108372364658
+  },
+  "Commune IV": {
+    "elevation": 360.0,
+    "slope": 19.533023527405312
+  },
+  "Commune V": {
+    "elevation": 326.0,
+    "slope": 2.802704179114314
+  },
+  "Commune VI": {
+    "elevation": 340.0,
+    "slope": 3.0578747725705986
+  }
+}
