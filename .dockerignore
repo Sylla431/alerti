@@ -1,0 +1,33 @@
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.git/
+.idea/
+.vscode/
+.DS_Store
+.env
+.env.*
+
+frontend/node_modules/
+frontend/build/
+
+# Données lourdes (pas nécessaires à l'inférence API)
+backend/data/raw/
+backend/data/training/
+backend/data/historical_data/
+backend/data/*.tif
+backend/data/*.nc
+
+# Config Vercel (inutile sur Railway)
+.vercel/
+vercel.json
+app_vercel.py
+requirements-vercel.txt
+VERCEL_DEPLOY.md
+
+# Gros modèles non utilisés en prod Bamako
+backend/models/cnn_model.h5
+backend/models/fusion_model.h5
+backend/models/lstm_model.h5

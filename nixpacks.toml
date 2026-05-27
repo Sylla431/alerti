@@ -1,0 +1,11 @@
+# Secours si Railway utilise Nixpacks/Railpack au lieu du Dockerfile.
+# Préférer railway.json → builder DOCKERFILE.
+
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python app.py"

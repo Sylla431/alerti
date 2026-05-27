@@ -34,9 +34,11 @@ instance/
 .env
 .env.local
 
-# Models
+# Models (gros fichiers — sauf artefacts Bamako prod pour Railway)
 backend/models/*.h5
+!backend/models/lstm_model_bamako.h5
 backend/models/*.pkl
+!backend/models/lstm_scaler_bamako.pkl
 backend/models/*.hdf5
 
 # IDE
