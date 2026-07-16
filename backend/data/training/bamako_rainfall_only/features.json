@@ -1,0 +1,10 @@
+{
+  "feature_names": [
+    "precipitation",
+    "antecedent_precip_3d",
+    "antecedent_precip_7d",
+    "antecedent_precip_14d",
+    "soil_saturation_index"
+  ],
+  "val_year": 2024
+}

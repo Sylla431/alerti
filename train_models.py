@@ -32,7 +32,7 @@ def main():
     print()
     
     try:
-        from backend.models.model_trainer import main as train_main
+        from models.trainers.model_trainer import main as train_main
         train_main()
         
         print()
@@ -41,9 +41,9 @@ def main():
         print("=" * 70)
         print()
         print("Les modèles ont été sauvegardés dans :")
-        print("  - backend/models/lstm_model.h5")
-        print("  - backend/models/cnn_model.h5")
-        print("  - backend/models/fusion_model.h5")
+        print("  - backend/models/artifacts/lstm_model.h5")
+        print("  - backend/models/artifacts/cnn_model.h5")
+        print("  - backend/models/artifacts/fusion_model.h5")
         print()
         print("Vous pouvez maintenant utiliser l'API pour faire des prédictions !")
         print()

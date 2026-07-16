@@ -62,30 +62,40 @@ def fetch_merged_daily_meteo(
     lon: float,
     sequence_length: int = 30,
     forecast_days: int = 7,
+    future_days: int = 0,
 ) -> Tuple[pd.DataFrame, Dict]:
     """
-    Série journalière sur `sequence_length` jours se terminant aujourd'hui.
-    Précipitations : CHIRPS (AfricaDataService) + enrichissement OpenWeather.
+    Série journalière couvrant `sequence_length` jours observés (se terminant
+    aujourd'hui) + `future_days` jours futurs alimentés par la PRÉVISION.
+
+    - Jours ≤ aujourd'hui : CHIRPS (AfricaDataService) + enrichissement OpenWeather.
+    - Jours > aujourd'hui : prévision OpenWeather (pluie annoncée).
+
+    `future_days=0` (défaut) → comportement historique (fenêtre s'arrêtant
+    aujourd'hui), utilisé par le modèle 29 features.
     """
     africa = AfricaDataService()
     weather = WeatherForecastService()
 
-    end_day = date.today()
-    start_day = end_day - timedelta(days=sequence_length - 1)
+    today = date.today()
+    start_day = today - timedelta(days=sequence_length - 1)
+    end_day = today + timedelta(days=max(0, future_days))
     meteo_bundle = africa.get_comprehensive_meteo_data(lat, lon, days_back=sequence_length)
 
+    chirps_bundle = meteo_bundle.get("chirps", {}) or {}
     precip_by_date: Dict[str, float] = {}
-    for entry in meteo_bundle.get("chirps", {}).get("daily_data", []) or []:
+    for entry in chirps_bundle.get("daily_data", []) or []:
         key = _parse_date_key(entry.get("date", ""))
         if key:
             precip_by_date[key] = float(entry.get("precipitation", 0) or 0)
 
     ow_by_date: Dict[str, Dict] = {}
-    data_sources = ["chirps_simulated_or_cached"]
+    chirps_label = "chirps_real" if chirps_bundle.get("real_days") else "chirps_simulated"
+    data_sources = [chirps_label]
     weather_error: Optional[str] = None
 
     try:
-        forecast = weather.get_forecast(lat, lon, days=forecast_days)
+        forecast = weather.get_forecast(lat, lon, days=max(forecast_days, future_days))
         if forecast.get("source") != "fallback":
             data_sources.append("openweather_forecast")
         for day in forecast.get("forecasts", []) or []:
@@ -97,7 +107,7 @@ def fetch_merged_daily_meteo(
 
     try:
         current = weather.get_current_weather(lat, lon)
-        today_key = end_day.isoformat()
+        today_key = today.isoformat()
         if current and current.get("source") != "fallback":
             data_sources.append("openweather_current")
             ow_by_date[today_key] = {
@@ -168,7 +178,9 @@ def fetch_merged_daily_meteo(
 
     meta = {
         "sequence_start_date": start_day.isoformat(),
-        "sequence_end_date": end_day.isoformat(),
+        "sequence_end_date": today.isoformat(),
+        "forecast_horizon_end": end_day.isoformat(),
+        "future_days_included": max(0, future_days),
         "data_sources": list(dict.fromkeys(data_sources)),
         "weather_error": weather_error,
         "forecast_days_available": forecast_days,

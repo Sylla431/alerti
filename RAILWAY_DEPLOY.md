@@ -17,8 +17,8 @@ Les fichiers sont ignorés par défaut. Les inclure pour la prod :
 
 ```bash
 cd alerti
-git add -f backend/models/lstm_model_bamako.h5
-git add -f backend/models/lstm_scaler_bamako.pkl
+git add -f backend/models/artifacts/lstm_model_bamako.h5
+git add -f backend/models/artifacts/lstm_scaler_bamako.pkl
 git commit -m "Add Bamako LSTM artifacts for Railway deploy"
 git push
 ```

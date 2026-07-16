@@ -83,7 +83,7 @@ def get_hybrid_predictor():
     if _hybrid_load_error:
         raise RuntimeError(_hybrid_load_error)
     try:
-        from models.hybrid_model import HybridFloodPredictor
+        from models.predictors.hybrid_model import HybridFloodPredictor
         _hybrid_predictor = HybridFloodPredictor()
         print("[startup] OK hybrid (lazy)")
         return _hybrid_predictor
@@ -399,6 +399,9 @@ def predict_bamako_commune():
     neighborhood = data.get('neighborhood')
     latitude = data.get('latitude')
     longitude = data.get('longitude')
+    model = (data.get('model') or 'rainfall').lower()
+    if model not in ('rainfall', 'full'):
+        model = 'rainfall'
 
     if neighborhood and not commune:
         from utils.bamako_neighborhoods import (
@@ -419,6 +422,7 @@ def predict_bamako_commune():
             neighborhood=neighborhood,
             latitude=latitude,
             longitude=longitude,
+            model=model,
         )
         if neighborhood and not result.get('neighborhood'):
             result['neighborhood'] = neighborhood

@@ -40,7 +40,11 @@ NASA_WORLDVIEW_URL = "https://wvs.earthdata.nasa.gov"
 LSTM_SEQUENCE_LENGTH = 30  # Days of historical data
 LSTM_FORECAST_DAYS = 7     # Days to predict ahead
 CNN_INPUT_SIZE = (256, 256)
-MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'backend', 'models')
+# Artefacts entraînés (.h5, .pkl) — séparés du code Python (models/predictors, models/trainers)
+MODEL_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    'backend', 'models', 'artifacts',
+)
 
 # Alert Thresholds
 ALERT_THRESHOLDS = {

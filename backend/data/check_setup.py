@@ -148,10 +148,16 @@ def check_models():
     
     models_dir = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
-        'models'
+        'models', 'artifacts'
     )
     
-    model_files = ['lstm_model.h5', 'cnn_model.h5', 'fusion_model.h5']
+    model_files = [
+        'lstm_model.h5',
+        'cnn_model.h5',
+        'fusion_model.h5',
+        'lstm_model_bamako.h5',
+        'lstm_model_bamako_rainfall.h5',
+    ]
     
     for model_file in model_files:
         model_path = os.path.join(models_dir, model_file)

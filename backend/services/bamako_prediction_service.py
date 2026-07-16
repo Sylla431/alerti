@@ -16,7 +16,11 @@ from typing import Dict, Optional
 import joblib
 import numpy as np
 
-from models.lstm_model_bamako import LSTMPredictorBamako
+from models.predictors.lstm_model_bamako import LSTMPredictorBamako
+from models.predictors.lstm_model_bamako_rainfall import (
+    RAINFALL_FEATURE_COLS,
+    LSTMPredictorBamakoRainfall,
+)
 from services.bamako_live_sequence_builder import (
     build_model_sequence,
     fetch_merged_daily_meteo,
@@ -45,6 +49,26 @@ class BamakoPredictionService:
         backend_root = os.path.dirname(os.path.dirname(__file__))
         self.training_dir = os.path.join(backend_root, "data", "training", "bamako_lstm")
         self.lstm_predictor = LSTMPredictorBamako()
+
+        # Modèle pluie-seule (régional Bamako-ville). Chargé uniquement si son
+        # artefact entraîné existe, pour ne jamais servir un modèle non entraîné.
+        self.rainfall_predictor: Optional[LSTMPredictorBamakoRainfall] = None
+        rainfall_h5 = os.path.join(
+            backend_root, "models", "artifacts", "lstm_model_bamako_rainfall.h5"
+        )
+        rainfall_pkl = os.path.join(
+            backend_root, "models", "artifacts", "lstm_scaler_bamako_rainfall.pkl"
+        )
+        if os.path.exists(rainfall_h5) and os.path.exists(rainfall_pkl):
+            try:
+                self.rainfall_predictor = LSTMPredictorBamakoRainfall()
+                print("[BamakoPredictionService] ✅ Modèle pluie-seule disponible")
+            except Exception as exc:
+                print(f"[BamakoPredictionService] ⚠️ Modèle pluie-seule indisponible: {exc}")
+                self.rainfall_predictor = None
+        else:
+            print("[BamakoPredictionService] ℹ️ Artefact pluie-seule absent (modèle 29-feat seul)")
+
         self.sequences_by_commune: Dict[str, CommuneSequence] = {}
         self.last_loaded_at: Optional[datetime] = None
         self._load_latest_sequences()
@@ -159,10 +183,34 @@ class BamakoPredictionService:
         latitude: Optional[float] = None,
         longitude: Optional[float] = None,
         use_live_weather: bool = True,
+        model: str = "rainfall",
     ) -> Dict:
-        """Prédiction Bamako : météo live par défaut, repli sur séquences .npy."""
+        """Prédiction Bamako.
+
+        model :
+          - "rainfall" (défaut) : modèle pluie-seule régional (5 features) —
+            recommandé, validé sur CHIRPS réel. Repli auto sur "full" si absent.
+          - "full"     : modèle 29 features par commune.
+
+        En live : reconstruit une fenêtre de 30 jours (météo récente + prévisions)
+        puis infère ; repli sur les séquences .npy en cas d'échec.
+        """
+        want_rainfall = model == "rainfall" and self.rainfall_predictor is not None
+        if model == "rainfall" and self.rainfall_predictor is None:
+            print(
+                "[BamakoPredictionService] ℹ️ Modèle pluie-seule indisponible, "
+                "repli sur le modèle 29 features"
+            )
+
         if use_live_weather:
             try:
+                if want_rainfall:
+                    return self.predict_rainfall_live(
+                        commune=commune,
+                        neighborhood=neighborhood,
+                        latitude=latitude,
+                        longitude=longitude,
+                    )
                 return self.predict_live(
                     commune=commune,
                     neighborhood=neighborhood,
@@ -175,6 +223,118 @@ class BamakoPredictionService:
                     "repli séquences entraînement"
                 )
         return self._predict_from_cached_sequences(commune=commune, neighborhood=neighborhood)
+
+    def predict_rainfall_live(
+        self,
+        commune: Optional[str] = None,
+        neighborhood: Optional[str] = None,
+        *,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+    ) -> Dict:
+        """Prédiction LIVE avec le modèle pluie-seule (risque régional Bamako-ville).
+
+        Reconstruit la fenêtre de 30 jours de pluie (CHIRPS + OpenWeather) et
+        infère sur les 5 features pluie. Le résultat est identique pour toute la
+        ville (aucune différenciation commune) ; commune/quartier servent au
+        contexte (zones à risque, facteurs).
+        """
+        if self.rainfall_predictor is None:
+            raise ValueError("Modèle pluie-seule non disponible")
+
+        start_time = time.perf_counter()
+        # Commune facultative pour le modèle régional : sert au contexte.
+        resolved_commune = self._resolve_commune(commune, neighborhood)
+
+        commune_info = BAMAKO_COMMUNES.get(resolved_commune, {}) if resolved_commune else {}
+        if latitude is not None and longitude is not None:
+            lat, lon = float(latitude), float(longitude)
+        else:
+            lat = commune_info.get("lat")
+            lon = commune_info.get("lon")
+        if lat is None or lon is None:
+            # Repli sur le centre-ville de Bamako pour un signal régional.
+            lat, lon = 12.6392, -8.0029
+
+        seq_len = self.rainfall_predictor.sequence_length
+        future_days = int(getattr(self.rainfall_predictor, "forecast_days", 7))
+        input_length = int(getattr(self.rainfall_predictor, "input_length", seq_len + future_days))
+        daily_df, weather_meta = fetch_merged_daily_meteo(
+            float(lat),
+            float(lon),
+            sequence_length=seq_len,
+            forecast_days=future_days,
+            # Étend la fenêtre à aujourd'hui + 7 jours : le modèle voit la pluie
+            # PRÉVUE (déclencheur) en plus des antécédents observés.
+            future_days=future_days,
+        )
+
+        missing = [c for c in RAINFALL_FEATURE_COLS if c not in daily_df.columns]
+        if missing:
+            raise ValueError(f"Features pluie manquantes dans la série live: {missing}")
+
+        window = daily_df.iloc[-input_length:]
+        if len(window) < input_length:
+            raise ValueError(
+                f"Série trop courte ({len(window)} jours, besoin de {input_length} "
+                f"= {seq_len} observés + {future_days} prévus)"
+            )
+        sequence = window[RAINFALL_FEATURE_COLS].astype(np.float32).values
+        sequence = np.nan_to_num(sequence, nan=0.0, posinf=0.0, neginf=0.0)
+
+        batch = sequence[np.newaxis, ...]
+        probability = float(self.rainfall_predictor.predict(batch)[0])
+        risk_level = self.rainfall_predictor._get_risk_level(probability)
+
+        static_features = get_static_features(resolved_commune) or {} if resolved_commune else {}
+        risk_factors = get_risk_factors(resolved_commune) or {} if resolved_commune else {}
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+        # Ligne "aujourd'hui" (jour d'émission) = avant les jours de prévision.
+        issue_row = daily_df.iloc[-(future_days + 1)] if future_days > 0 else daily_df.iloc[-1]
+        # Résumé de la prévision de pluie sur l'horizon.
+        forecast_rows = daily_df.iloc[-future_days:] if future_days > 0 else daily_df.iloc[0:0]
+        forecast_precip = forecast_rows["precipitation"].astype(float) if not forecast_rows.empty else None
+        return {
+            "commune": resolved_commune,
+            "neighborhood": neighborhood,
+            "prediction": {
+                "flood_probability": probability,
+                "risk_level": risk_level,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "sequence_end_date": weather_meta.get("sequence_end_date"),
+                "sequence_start_date": weather_meta.get("sequence_start_date"),
+                "forecast_horizon_end": weather_meta.get("forecast_horizon_end"),
+                "forecast_days": future_days,
+                "forecast_precip_total_mm": (
+                    round(float(forecast_precip.sum()), 1) if forecast_precip is not None else None
+                ),
+                "forecast_precip_max_mm": (
+                    round(float(forecast_precip.max()), 1) if forecast_precip is not None else None
+                ),
+                "last_day_precipitation_mm": float(issue_row.get("precipitation", 0)),
+                "antecedent_precip_7d_mm": float(issue_row.get("antecedent_precip_7d", 0)),
+                "coordinates": {"lat": lat, "lon": lon},
+                "source": "lstm_bamako_rainfall_live",
+                "scope": "regional_city",
+                "stale": False,
+            },
+            "context": {
+                "static_features": static_features,
+                "risk_factors": risk_factors,
+                "zones_risque": commune_info.get("zones_risque"),
+            },
+            "metadata": {
+                "latency_ms": duration_ms,
+                "inference_mode": "live_weather",
+                "model": "rainfall_only",
+                "data_sources": weather_meta.get("data_sources", []),
+                "feature_count": len(RAINFALL_FEATURE_COLS),
+                "features_used": list(RAINFALL_FEATURE_COLS),
+                "weather_error": weather_meta.get("weather_error"),
+                "forecast_days_available": weather_meta.get("forecast_days_available"),
+            },
+        }
 
     def predict_live(
         self,

@@ -68,6 +68,16 @@ class BamakoDataPreparator:
                 '2021-08-21', '2021-08-22'
             ]
         }
+
+        # Événements ville récents rapportés (observations terrain 2026) —
+        # inondations de certaines zones. Appliqués à toutes les communes.
+        # NB : hors fenêtre CHIRPS actuelle (2020-2024) et sujets à la latence
+        # CHIRPS (~3 semaines) ; effet réel une fois la série étendue à 2026.
+        _recent_city_floods = ['2026-07-06', '2026-07-15']
+        for _commune in self.known_floods:
+            self.known_floods[_commune] = sorted(
+                set(self.known_floods[_commune]) | set(_recent_city_floods)
+            )
     
     def _detect_available_years(self):
         """Détecte automatiquement les fichiers CHIRPS déjà extraits."""

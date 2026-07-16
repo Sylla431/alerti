@@ -4,7 +4,7 @@ Data sources: CHIRPS, GPM IMERG, TAMSAT
 """
 import requests
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, date as date_cls, timedelta
 import json
 import numpy as np
 from utils.config import (
@@ -12,60 +12,125 @@ from utils.config import (
     EARTHDATA_USERNAME, EARTHDATA_PASSWORD
 )
 
+try:
+    from services.chirps_reader import CHIRPSDailyReader, RASTERIO_AVAILABLE
+except Exception as _exc:  # pragma: no cover
+    CHIRPSDailyReader = None  # type: ignore
+    RASTERIO_AVAILABLE = False
+
+
+def _to_date(value):
+    """Normalise un datetime/date en date."""
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
 class AfricaDataService:
     """Service for fetching Africa-specific flood forecasting data"""
-    
+
+    # Autoriser (ou non) la simulation pour combler les jours CHIRPS manquants.
+    # Peut être désactivé via CHIRPS_SIMULATE_FALLBACK=0 pour n'utiliser que du réel.
     def __init__(self):
         self.chirps_base_url = CHIRPS_BASE_URL
         self.gpm_base_url = GPM_BASE_URL
         self.earthdata_username = EARTHDATA_USERNAME
         self.earthdata_password = EARTHDATA_PASSWORD
-    
+        self.simulate_fallback = os.getenv("CHIRPS_SIMULATE_FALLBACK", "1") != "0"
+
+        self._chirps_reader = None
+        if CHIRPSDailyReader is not None and RASTERIO_AVAILABLE:
+            try:
+                self._chirps_reader = CHIRPSDailyReader(base_url=self.chirps_base_url)
+            except Exception as exc:
+                print(f"[CHIRPS] Initialisation du lecteur impossible: {exc}")
+                self._chirps_reader = None
+
     def get_chirps_precipitation(self, lat, lon, start_date, end_date):
-        """Get CHIRPS precipitation data - BEST for Africa"""
-        try:
-            # CHIRPS provides daily data in NetCDF format
-            # Format: /global_daily/netcdf/p05/chirps-v2.0.YYYY.MM.DD.days_p05.nc
-            
-            dates = []
-            current_date = start_date
-            while current_date <= end_date:
-                dates.append(current_date)
-                current_date += timedelta(days=1)
-            
-            total_precipitation = 0
-            daily_precip = []
-            
-            for date in dates:
-                # CHIRPS file URL
-                file_url = (
-                    f"{self.chirps_base_url}/"
-                    f"global_daily/netcdf/p05/"
-                    f"chirps-v2.0.{date.year}.{date.month:02d}.{date.day:02d}.days_p05.nc"
-                )
-                
-                # In production, download and process NetCDF file using xarray/netCDF4
-                # For now, return simulated data
-                daily_amount = self._simulate_chirps_data(lat, lon, date)
-                daily_precip.append({
-                    'date': date.isoformat(),
-                    'precipitation': daily_amount
-                })
-                total_precipitation += daily_amount
-            
-            return {
-                'source': 'CHIRPS',
-                'location': {'lat': lat, 'lon': lon},
-                'start_date': start_date.isoformat(),
-                'end_date': end_date.isoformat(),
-                'total_precipitation': total_precipitation,
-                'average_daily_precipitation': total_precipitation / len(dates) if dates else 0,
-                'daily_data': daily_precip,
-                'note': 'Replace with actual CHIRPS NetCDF processing using xarray'
-            }
-        except Exception as e:
-            print(f"Error fetching CHIRPS data: {e}")
-            return self._simulate_chirps_data_range(lat, lon, start_date, end_date)
+        """Précipitations journalières CHIRPS RÉELLES (GeoTIFF p05, ~5 km).
+
+        Télécharge et lit les fichiers CHIRPS-2.0 global daily. Les jours non
+        publiés (latence ~3 semaines) ou en erreur sont comblés par simulation
+        si `CHIRPS_SIMULATE_FALLBACK` != 0, sinon renvoyés à 0 et signalés.
+        """
+        start = _to_date(start_date)
+        end = _to_date(end_date)
+
+        dates = []
+        current_date = start
+        while current_date <= end:
+            dates.append(current_date)
+            current_date += timedelta(days=1)
+
+        # Si le lecteur réel n'est pas disponible, on retombe sur la simulation.
+        if self._chirps_reader is None:
+            print(
+                "[CHIRPS] Lecteur réel indisponible (rasterio manquant ?) — "
+                "données simulées."
+            )
+            return self._simulate_chirps_data_range(lat, lon, start, end)
+
+        daily_precip = []
+        total_precipitation = 0.0
+        real_days = 0
+        simulated_days = 0
+        missing_dates = []
+
+        for d in dates:
+            amount = None
+            try:
+                amount = self._chirps_reader.get_daily_precip(lat, lon, d)
+            except Exception as exc:
+                print(f"[CHIRPS] Erreur lecture {d.isoformat()}: {exc}")
+                amount = None
+
+            if amount is not None:
+                is_real = True
+                real_days += 1
+            else:
+                missing_dates.append(d.isoformat())
+                if self.simulate_fallback:
+                    amount = self._simulate_chirps_data(lat, lon, d)
+                    simulated_days += 1
+                else:
+                    amount = 0.0
+                is_real = False
+
+            daily_precip.append({
+                'date': d.isoformat(),
+                'precipitation': round(float(amount), 3),
+                'is_real': is_real,
+            })
+            total_precipitation += float(amount)
+
+        source = 'CHIRPS'
+        if simulated_days and real_days:
+            source = 'CHIRPS (partiel: réel + simulé)'
+        elif simulated_days and not real_days:
+            source = 'CHIRPS (simulé — jours indisponibles)'
+        elif missing_dates and not real_days:
+            source = 'CHIRPS (aucune donnée réelle disponible)'
+        elif missing_dates:
+            source = 'CHIRPS (partiel: réel + jours manquants à 0)'
+
+        return {
+            'source': source,
+            'location': {'lat': lat, 'lon': lon},
+            'start_date': start.isoformat(),
+            'end_date': end.isoformat(),
+            'total_precipitation': round(total_precipitation, 3),
+            'average_daily_precipitation': (
+                round(total_precipitation / len(dates), 3) if dates else 0
+            ),
+            'daily_data': daily_precip,
+            'real_days': real_days,
+            'simulated_days': simulated_days,
+            'missing_dates': missing_dates,
+            'note': (
+                f'{real_days} jours réels (CHIRPS-2.0 daily p05), '
+                f'{simulated_days} simulés (latence/indispo)'
+            ),
+        }
     
     def get_gpm_imerg_precipitation(self, lat, lon, hours_back=72):
         """Get GPM IMERG near real-time precipitation"""
