@@ -37,8 +37,10 @@ instance/
 # Models (gros fichiers — sauf artefacts Bamako prod pour Railway)
 backend/models/artifacts/*.h5
 !backend/models/artifacts/lstm_model_bamako.h5
+!backend/models/artifacts/lstm_model_bamako_rainfall.h5
 backend/models/artifacts/*.pkl
 !backend/models/artifacts/lstm_scaler_bamako.pkl
+!backend/models/artifacts/lstm_scaler_bamako_rainfall.pkl
 backend/models/artifacts/*.hdf5
 # Anciens chemins plats (si des fichiers trainent encore à la racine)
 backend/models/*.h5
