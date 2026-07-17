@@ -33,6 +33,14 @@ Copier depuis `.env` :
 - `PORT` est défini automatiquement par Railway
 - Optionnel : Twilio, FCM, etc.
 
+Pour les **alertes push Bamako** (job horaire) :
+
+- `CRON_SECRET` — secret partagé avec le cron (`X-Cron-Secret`)
+- `SUPABASE_URL` — ex. `https://xxxx.supabase.co`
+- `SUPABASE_SERVICE_ROLE_KEY` — clé service role (lecture `fcm_tokens`)
+- `ALERT_PUSH_URL` — défaut `https://flood-alert-lambdav1.vercel.app/api/send-notification`
+- Optionnel : `ALERT_PROB_THRESHOLD=0.5`, `ALERT_DAILY_RAIN_MM=20`, `ALERT_COOLDOWN_HOURS=6`
+
 Ne pas uploader `.env` tel quel si le repo est public.
 
 Après deploy, vérifier :
@@ -76,6 +84,42 @@ curl -X POST https://VOTRE-SERVICE.up.railway.app/api/bamako/predict \
 ```bash
 flutter run --dart-define=ALERTI_API_BASE=https://VOTRE-SERVICE.up.railway.app
 ```
+
+### 7. Cron alertes push Bamako (toutes les heures)
+
+Endpoint protégé : `POST|GET /api/bamako/alert-check`
+
+Conditions d’envoi (OR) : proba Alerti Pluie v1 > 50 % **ou** pluie journalière prévue (aujourd’hui/demain) > 20 mm. Cooldown 6 h par type de déclencheur.
+
+**Test dry-run (sans push) :**
+
+```bash
+curl -X GET "https://VOTRE-SERVICE.up.railway.app/api/bamako/alert-check?dry_run=1" \
+  -H "X-Cron-Secret: $CRON_SECRET"
+```
+
+**Envoi réel (ignore cooldown une fois) :**
+
+```bash
+curl -X POST "https://VOTRE-SERVICE.up.railway.app/api/bamako/alert-check?force=1" \
+  -H "X-Cron-Secret: $CRON_SECRET"
+```
+
+**CLI locale (sans HTTP) :**
+
+```bash
+cd alerti/backend
+../venv/bin/python jobs/run_bamako_alert_check.py --dry-run
+```
+
+**Cron Railway / externe (horaire) :**
+
+```bash
+curl -X POST "https://VOTRE-SERVICE.up.railway.app/api/bamako/alert-check" \
+  -H "X-Cron-Secret: $CRON_SECRET"
+```
+
+Configurer un cron (Railway Cron, GitHub Actions, etc.) toutes les heures avec cette commande. Le service Vercel `send-notification` doit avoir `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`.
 
 ## Si le build échoue encore
 

@@ -252,6 +252,7 @@ def index():
             'predict_meteo': '/api/predict-meteo',
             'predict_image': '/api/predict-image',
             'bamako_predict': '/api/bamako/predict',
+            'bamako_alert_check': '/api/bamako/alert-check',
             'predict_neighborhood': '/api/predict/neighborhood',
             'mali_neighborhoods': '/api/mali/neighborhoods',
             'mali_neighborhood_predict': '/api/mali/neighborhood/<name>/predict',
@@ -444,6 +445,65 @@ def predict_bamako_commune():
     except Exception as exc:
         app.logger.exception("Bamako prediction failed: %s", exc)
         return jsonify({'error': 'Internal error while running Bamako prediction'}), 500
+
+
+@app.route('/api/bamako/alert-check', methods=['GET', 'POST', 'OPTIONS'])
+def bamako_alert_check():
+    """Job horaire : Alerti Pluie v1 + pluie jour → push FCM (protégé par CRON_SECRET)."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    from utils.config import CRON_SECRET
+
+    body = request.get_json(silent=True) or {}
+    provided = (
+        request.headers.get('X-Cron-Secret')
+        or request.args.get('secret')
+        or body.get('secret')
+        or ''
+    ).strip()
+    if not CRON_SECRET:
+        return jsonify({'error': 'CRON_SECRET not configured on server'}), 503
+    if not provided or provided != CRON_SECRET:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    if not bamako_prediction_service:
+        return jsonify({
+            'error': 'Bamako prediction service not available',
+            'startup_errors': _startup_errors,
+        }), 503
+
+    dry_run = (
+        request.args.get('dry_run', '0') in ('1', 'true', 'yes')
+        or bool(body.get('dry_run'))
+    )
+    force = (
+        request.args.get('force', '0') in ('1', 'true', 'yes')
+        or bool(body.get('force'))
+    )
+
+    try:
+        from services.bamako_alert_watcher import BamakoAlertWatcher
+
+        watcher = BamakoAlertWatcher(
+            prediction_service=bamako_prediction_service,
+            weather_service=weather_forecast_service,
+        )
+        result = watcher.run(dry_run=dry_run, force=force)
+        app.logger.info(
+            "[BamakoAlertCheck] action=%s proba=%.3f rain=%.1f triggers=%s tokens=%s dry_run=%s",
+            result.get('action'),
+            result.get('flood_probability', 0),
+            result.get('daily_rain_mm', 0),
+            result.get('triggers_to_send'),
+            result.get('tokens_targeted'),
+            dry_run,
+        )
+        return jsonify(result)
+    except Exception as exc:
+        app.logger.exception("Bamako alert-check failed: %s", exc)
+        return jsonify({'error': 'Internal error during Bamako alert check', 'detail': str(exc)}), 500
+
 
 @app.route('/api/predict-image', methods=['POST'])
 def predict_flood_image():

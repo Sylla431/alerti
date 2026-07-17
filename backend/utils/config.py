@@ -29,6 +29,18 @@ OPENWEATHERMAP_API_KEY = (os.getenv('OPENWEATHERMAP_API_KEY') or '').strip()
 FCM_SERVER_KEY = os.getenv('FCM_SERVER_KEY', '')
 FCM_CREDENTIALS_PATH = os.getenv('FCM_CREDENTIALS_PATH', '')
 
+# Cron / alertes push Bamako (job horaire)
+CRON_SECRET = (os.getenv('CRON_SECRET') or '').strip()
+SUPABASE_URL = (os.getenv('SUPABASE_URL') or '').strip().rstrip('/')
+SUPABASE_SERVICE_ROLE_KEY = (os.getenv('SUPABASE_SERVICE_ROLE_KEY') or '').strip()
+ALERT_PUSH_URL = (
+    os.getenv('ALERT_PUSH_URL')
+    or 'https://flood-alert-lambdav1.vercel.app/api/send-notification'
+).strip()
+ALERT_PROB_THRESHOLD = float(os.getenv('ALERT_PROB_THRESHOLD', '0.5'))
+ALERT_DAILY_RAIN_MM = float(os.getenv('ALERT_DAILY_RAIN_MM', '20'))
+ALERT_COOLDOWN_HOURS = float(os.getenv('ALERT_COOLDOWN_HOURS', '6'))
+
 # Data Sources URLs
 CHIRPS_BASE_URL = "https://data.chc.ucsb.edu/products/CHIRPS-2.0"
 GPM_BASE_URL = "https://gpm1.gesdisc.eosdis.nasa.gov"
