@@ -29,5 +29,6 @@ COPY backend ./backend
 
 EXPOSE 8080
 
-# Railway injecte $PORT
-CMD ["sh", "-c", "python app.py"]
+# Railway injecte $PORT — gunicorn (WSGI prod), pas le serveur de dev Flask
+# 1 worker : modèles TF lourds en mémoire ; threads pour les requêtes concurrentes
+CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT:-8080} --workers 1 --threads 4 --timeout 120 --access-logfile - --error-logfile -"]

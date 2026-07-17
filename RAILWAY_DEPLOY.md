@@ -71,6 +71,8 @@ git push origin main
 
 Build attendu : 10–20 min (TensorFlow). Des logs Docker doivent apparaître.
 
+Le conteneur démarre avec **gunicorn** (pas le serveur de dev Flask). Tu ne dois plus voir le warning « development server ».
+
 ### 5. Tester
 
 ```bash
