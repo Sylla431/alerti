@@ -99,8 +99,9 @@ backend/data/training/cnn/*.npy
 backend/data/chirps_mali_*.csv
 backend/data/mali_weather_complete.csv
 
-# État cooldown alertes push Bamako (généré à l'exécution)
+# État cooldown / statut carte alertes push Bamako (généré à l'exécution)
 backend/data/bamako_alert_cooldown.json
+backend/data/bamako_alert_status.json
 
 # Added by code-review-graph
 .code-review-graph/

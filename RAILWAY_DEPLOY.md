@@ -41,7 +41,7 @@ Pour les **alertes push Bamako** (job horaire) :
 - `SUPABASE_URL` — ex. `https://xxxx.supabase.co`
 - `SUPABASE_SERVICE_ROLE_KEY` — clé service role (lecture `fcm_tokens`)
 - `ALERT_PUSH_URL` — défaut `https://flood-alert-lambdav1.vercel.app/api/send-notification`
-- Optionnel : `ALERT_PROB_THRESHOLD=0.5`, `ALERT_DAILY_RAIN_MM=20`, `ALERT_COOLDOWN_HOURS=6`
+- Optionnel : `ALERT_PROB_THRESHOLD=0.5`, `ALERT_DAILY_RAIN_MM=20`, `ALERT_COOLDOWN_HOURS=3`
 
 Ne pas uploader `.env` tel quel si le repo est public.
 
@@ -91,9 +91,10 @@ flutter run --dart-define=ALERTI_API_BASE=https://VOTRE-SERVICE.up.railway.app
 
 ### 7. Cron alertes push Bamako (toutes les heures)
 
-Endpoint protégé : `POST|GET /api/bamako/alert-check`
+Endpoint protégé : `POST|GET /api/bamako/alert-check`  
+Statut public (couleurs carte app) : `GET /api/bamako/alert-status` → `map_status` = `urgence` | `alerte` | `normal`
 
-Conditions d’envoi (OR) : proba Alerti Pluie v1 > 50 % **ou** pluie journalière prévue (aujourd’hui/demain) > 20 mm. Cooldown 6 h par type de déclencheur.
+Conditions d’envoi (OR) : proba Alerti Pluie v1 > 50 % **ou** pluie journalière prévue (aujourd’hui/demain) > 20 mm. Cooldown 3 h par type de déclencheur.
 
 **Test dry-run (sans push) :**
 

@@ -6,7 +6,7 @@ FCM aux users Bamako (Supabase fcm_tokens → endpoint Vercel) si :
   - flood_probability > ALERT_PROB_THRESHOLD (défaut 0.5), ou
   - pluie prévue aujourd'hui/demain > ALERT_DAILY_RAIN_MM (défaut 20 mm)
 
-Anti-spam : cooldown par type de déclencheur (défaut 6 h).
+Anti-spam : cooldown par type de déclencheur (défaut 3 h).
 """
 from __future__ import annotations
 
@@ -51,6 +51,9 @@ class BamakoAlertWatcher:
                 backend_root, "data", "bamako_alert_cooldown.json"
             )
         self.cooldown_path = cooldown_path
+        self.status_path = os.path.join(
+            backend_root, "data", "bamako_alert_status.json"
+        )
         self.prediction_service = prediction_service
         self.weather_service = weather_service
 
@@ -91,6 +94,8 @@ class BamakoAlertWatcher:
             else:
                 skipped_cooldown.append(trigger)
 
+        map_status = self._derive_map_status(active_triggers, risk_level, proba)
+
         result: Dict[str, Any] = {
             "ok": True,
             "dry_run": dry_run,
@@ -101,6 +106,7 @@ class BamakoAlertWatcher:
             "risk_level": risk_level,
             "daily_rain_mm": round(float(daily_rain_mm), 2),
             "rain_day": rain_day,
+            "map_status": map_status,
             "thresholds": {
                 "prob": ALERT_PROB_THRESHOLD,
                 "daily_rain_mm": ALERT_DAILY_RAIN_MM,
@@ -116,6 +122,7 @@ class BamakoAlertWatcher:
 
         if not triggers_to_send:
             result["action"] = "none"
+            self._save_status_snapshot(result)
             return result
 
         title, body, data = self._build_message(
@@ -128,11 +135,13 @@ class BamakoAlertWatcher:
         if dry_run:
             result["action"] = "dry_run"
             result["push"] = {"skipped": True, "reason": "dry_run"}
+            self._save_status_snapshot(result)
             return result
 
         if not tokens:
             result["action"] = "no_tokens"
             result["push"] = {"skipped": True, "reason": "no_bamako_tokens"}
+            self._save_status_snapshot(result)
             return result
 
         push_result = self._send_push(tokens, title, body, data)
@@ -145,7 +154,74 @@ class BamakoAlertWatcher:
                 cooldown[trigger] = now_iso
             self._save_cooldown(cooldown)
 
+        self._save_status_snapshot(result)
         return result
+
+    @staticmethod
+    def _derive_map_status(
+        active_triggers: List[str], risk_level: str, proba: float
+    ) -> str:
+        """Statut carte aligné sur les couleurs capteurs : urgence / alerte / normal."""
+        risk = (risk_level or "").lower()
+        if (
+            TRIGGER_PROB in active_triggers
+            or risk in ("critical", "high")
+            or proba > ALERT_PROB_THRESHOLD
+        ):
+            return "urgence"
+        if TRIGGER_RAIN in active_triggers or risk in ("medium", "moderate"):
+            return "alerte"
+        return "normal"
+
+    def _save_status_snapshot(self, result: Dict[str, Any]) -> None:
+        """Persiste le dernier résultat cron pour l'app mobile (couleurs carte)."""
+        snapshot = {
+            "ok": True,
+            "updated_at": result.get("timestamp"),
+            "model": result.get("model"),
+            "flood_probability": result.get("flood_probability"),
+            "risk_level": result.get("risk_level"),
+            "daily_rain_mm": result.get("daily_rain_mm"),
+            "rain_day": result.get("rain_day"),
+            "map_status": result.get("map_status", "normal"),
+            "active_triggers": result.get("active_triggers") or [],
+            "action": result.get("action"),
+            "scope": "regional_city",
+        }
+        try:
+            os.makedirs(os.path.dirname(self.status_path), exist_ok=True)
+            with open(self.status_path, "w", encoding="utf-8") as fh:
+                json.dump(snapshot, fh, indent=2)
+        except Exception as exc:
+            print(f"[BamakoAlertWatcher] status save failed: {exc}")
+
+    @classmethod
+    def load_status_snapshot(cls) -> Dict[str, Any]:
+        """Lit le dernier statut persisté (pour GET /api/bamako/alert-status)."""
+        backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(backend_root, "data", "bamako_alert_status.json")
+        if not os.path.exists(path):
+            return {
+                "ok": True,
+                "available": False,
+                "map_status": "normal",
+                "message": "Aucun run cron encore disponible",
+            }
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if not isinstance(data, dict):
+                raise ValueError("invalid status file")
+            data["available"] = True
+            data.setdefault("map_status", "normal")
+            return data
+        except Exception as exc:
+            return {
+                "ok": False,
+                "available": False,
+                "map_status": "normal",
+                "error": str(exc),
+            }
 
     # ------------------------------------------------------------------ #
     # Evaluation

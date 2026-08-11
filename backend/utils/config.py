@@ -39,7 +39,7 @@ ALERT_PUSH_URL = (
 ).strip()
 ALERT_PROB_THRESHOLD = float(os.getenv('ALERT_PROB_THRESHOLD', '0.5'))
 ALERT_DAILY_RAIN_MM = float(os.getenv('ALERT_DAILY_RAIN_MM', '20'))
-ALERT_COOLDOWN_HOURS = float(os.getenv('ALERT_COOLDOWN_HOURS', '6'))
+ALERT_COOLDOWN_HOURS = float(os.getenv('ALERT_COOLDOWN_HOURS', '3'))
 
 # Data Sources URLs
 CHIRPS_BASE_URL = "https://data.chc.ucsb.edu/products/CHIRPS-2.0"

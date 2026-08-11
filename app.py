@@ -253,6 +253,7 @@ def index():
             'predict_image': '/api/predict-image',
             'bamako_predict': '/api/bamako/predict',
             'bamako_alert_check': '/api/bamako/alert-check',
+            'bamako_alert_status': '/api/bamako/alert-status',
             'predict_neighborhood': '/api/predict/neighborhood',
             'mali_neighborhoods': '/api/mali/neighborhoods',
             'mali_neighborhood_predict': '/api/mali/neighborhood/<name>/predict',
@@ -445,6 +446,25 @@ def predict_bamako_commune():
     except Exception as exc:
         app.logger.exception("Bamako prediction failed: %s", exc)
         return jsonify({'error': 'Internal error while running Bamako prediction'}), 500
+
+
+@app.route('/api/bamako/alert-status', methods=['GET', 'OPTIONS'])
+def bamako_alert_status():
+    """Dernier statut cron Bamako (public) — utilisé par l'app pour colorer les capteurs."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    try:
+        from services.bamako_alert_watcher import BamakoAlertWatcher
+
+        return jsonify(BamakoAlertWatcher.load_status_snapshot())
+    except Exception as exc:
+        app.logger.exception("Bamako alert-status failed: %s", exc)
+        return jsonify({
+            'ok': False,
+            'available': False,
+            'map_status': 'normal',
+            'error': str(exc),
+        }), 500
 
 
 @app.route('/api/bamako/alert-check', methods=['GET', 'POST', 'OPTIONS'])
