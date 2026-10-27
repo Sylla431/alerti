@@ -68,8 +68,12 @@ def fetch_merged_daily_meteo(
     Série journalière couvrant `sequence_length` jours observés (se terminant
     aujourd'hui) + `future_days` jours futurs alimentés par la PRÉVISION.
 
-    - Jours ≤ aujourd'hui : CHIRPS (AfricaDataService) + enrichissement OpenWeather.
-    - Jours > aujourd'hui : prévision OpenWeather (pluie annoncée).
+    Pluie, par ordre de priorité :
+    - Jours passés : CHIRPS final, sinon CHIRPS préliminaire, sinon historique
+      OpenWeather (day_summary).
+    - Aujourd'hui et jours futurs : total journalier prévu par OpenWeather.
+    Un jour sans aucune source est compté à 0 et listé dans
+    `meta["missing_precipitation_dates"]` (aucune valeur simulée).
 
     `future_days=0` (défaut) → comportement historique (fenêtre s'arrêtant
     aujourd'hui), utilisé par le modèle 29 features.
@@ -78,54 +82,85 @@ def fetch_merged_daily_meteo(
     weather = WeatherForecastService()
 
     today = date.today()
+    today_key = today.isoformat()
     start_day = today - timedelta(days=sequence_length - 1)
     end_day = today + timedelta(days=max(0, future_days))
-    meteo_bundle = africa.get_comprehensive_meteo_data(lat, lon, days_back=sequence_length)
-
-    chirps_bundle = meteo_bundle.get("chirps", {}) or {}
-    precip_by_date: Dict[str, float] = {}
-    for entry in chirps_bundle.get("daily_data", []) or []:
-        key = _parse_date_key(entry.get("date", ""))
-        if key:
-            precip_by_date[key] = float(entry.get("precipitation", 0) or 0)
-
-    ow_by_date: Dict[str, Dict] = {}
-    chirps_label = "chirps_real" if chirps_bundle.get("real_days") else "chirps_simulated"
-    data_sources = [chirps_label]
     weather_error: Optional[str] = None
 
+    precip_by_date: Dict[str, float] = {}
+    precip_source: Dict[str, str] = {}
+
+    # 1) Jours passés : CHIRPS final, sinon préliminaire.
+    chirps_bundle = africa.get_chirps_precipitation(
+        lat, lon, start_day, today - timedelta(days=1)
+    )
+    for entry in chirps_bundle.get("daily_data", []) or []:
+        key = _parse_date_key(entry.get("date", ""))
+        if key and entry.get("is_real"):
+            precip_by_date[key] = float(entry["precipitation"])
+            precip_source[key] = f"chirps_{entry['product']}"
+
+    # 2) Jours passés pas encore publiés par CHIRPS : historique OpenWeather.
+    gaps = [
+        start_day + timedelta(days=i)
+        for i in range((today - start_day).days)
+        if (start_day + timedelta(days=i)).isoformat() not in precip_by_date
+    ]
+    if gaps:
+        try:
+            history = weather.get_daily_precip_history(lat, lon, gaps)
+        except Exception as exc:
+            history = {}
+            weather_error = str(exc)
+        for key, mm in history.items():
+            if mm is not None:
+                precip_by_date[key] = mm
+                precip_source[key] = "openweather_history"
+
+    # 3) Aujourd'hui et jours futurs : total journalier prévu (journée entière,
+    #    pas la pluie de la dernière heure). +1 jour car daily[0] = aujourd'hui.
+    ow_by_date: Dict[str, Dict] = {}
     try:
-        forecast = weather.get_forecast(lat, lon, days=max(forecast_days, future_days))
+        forecast = weather.get_forecast(lat, lon, days=max(forecast_days, future_days) + 1)
         if forecast.get("source") != "fallback":
-            data_sources.append("openweather_forecast")
-        for day in forecast.get("forecasts", []) or []:
-            key = _parse_date_key(day.get("date", ""))
-            if key:
+            for day in forecast.get("forecasts", []) or []:
+                key = _parse_date_key(day.get("date", ""))
+                if not key:
+                    continue
                 ow_by_date[key] = day
+                total = (day.get("precipitation") or {}).get("total")
+                if key >= today_key and total is not None:
+                    precip_by_date[key] = float(total)
+                    precip_source[key] = "openweather_forecast"
     except Exception as exc:
         weather_error = str(exc)
 
+    # Conditions actuelles : température / humidité / pression du jour
+    # (modèle 29 features). La pluie du jour reste celle de la prévision.
+    current_used = False
     try:
         current = weather.get_current_weather(lat, lon)
-        today_key = today.isoformat()
         if current and current.get("source") != "fallback":
-            data_sources.append("openweather_current")
+            current_used = True
             ow_by_date[today_key] = {
-                "date": today_key,
+                **ow_by_date.get(today_key, {}),
                 "temperature": {"avg": current.get("temperature", 30.0)},
                 "humidity": {"avg": current.get("humidity", 60.0)},
                 "pressure": {"avg": current.get("pressure", 1013.0)},
-                "precipitation": {"total": current.get("precipitation", 0.0)},
             }
     except Exception as exc:
         if not weather_error:
             weather_error = str(exc)
 
     rows: List[Dict] = []
+    missing_precip: List[str] = []
     cursor = start_day
     while cursor <= end_day:
         key = cursor.isoformat()
-        precip = precip_by_date.get(key, 0.0)
+        precip = precip_by_date.get(key)
+        if precip is None:
+            missing_precip.append(key)
+            precip = 0.0
         ow = ow_by_date.get(key, {})
 
         temp = 30.0
@@ -142,11 +177,6 @@ def fetch_merged_daily_meteo(
             pres = ow.get("pressure") or {}
             if isinstance(pres, dict):
                 pressure = float(pres.get("avg") or pressure)
-            precip_ow = ow.get("precipitation") or {}
-            if isinstance(precip_ow, dict):
-                precip = float(precip_ow.get("total") or precip)
-            elif isinstance(precip_ow, (int, float)):
-                precip = float(precip_ow)
 
         rows.append(
             {
@@ -176,12 +206,22 @@ def fetch_merged_daily_meteo(
     df["antecedent_precip_14d"] = precip_series.rolling(window=14, min_periods=1).sum()
     df["soil_saturation_index"] = np.clip(precip_series.rolling(window=30, min_periods=1).sum() / 200.0, 0.0, 1.0)
 
+    source_counts: Dict[str, int] = {}
+    for key in df["date"].dt.strftime("%Y-%m-%d"):
+        source = precip_source.get(key, "missing")
+        source_counts[source] = source_counts.get(source, 0) + 1
+    data_sources = [s for s in source_counts if s != "missing"]
+    if current_used:
+        data_sources.append("openweather_current")
+
     meta = {
         "sequence_start_date": start_day.isoformat(),
         "sequence_end_date": today.isoformat(),
         "forecast_horizon_end": end_day.isoformat(),
         "future_days_included": max(0, future_days),
-        "data_sources": list(dict.fromkeys(data_sources)),
+        "data_sources": data_sources,
+        "precipitation_sources": source_counts,
+        "missing_precipitation_dates": missing_precip,
         "weather_error": weather_error,
         "forecast_days_available": forecast_days,
     }

@@ -2,10 +2,11 @@
 Weather Forecast Service - Fetches current weather and forecasts from OpenWeatherMap
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Tuple
 
@@ -16,6 +17,10 @@ _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 # Cache court pour le menu radial (évite 429 One Call à chaque clic)
 _SNAPSHOT_CACHE: Dict[str, Tuple[datetime, Dict]] = {}
 _SNAPSHOT_CACHE_TTL = timedelta(minutes=10)
+
+# Pluie des journées terminées (day_summary) : elle ne change plus, et chaque
+# appel coûte ~10-15 s, donc on ne la demande qu'une fois par processus.
+_DAY_SUMMARY_CACHE: Dict[str, float] = {}
 
 
 class WeatherForecastService:
@@ -295,11 +300,55 @@ class WeatherForecastService:
             'timestamp': datetime.now().isoformat()
         }
 
-    def _request_openweather(self, url: str, params: Dict) -> requests.Response:
+    def get_daily_precip_history(
+        self, lat: float, lon: float, days: List[date]
+    ) -> Dict[str, Optional[float]]:
+        """Pluie totale (mm) de jours passés via One Call 3.0 day_summary.
+
+        Retourne {"YYYY-MM-DD": mm, ou None si indisponible}. Les appels sont
+        lents (~10-15 s) : ils partent en parallèle et les journées terminées
+        sont mises en cache.
+        """
+        today = date.today()
+        cache_prefix = f"{round(lat, 3)}:{round(lon, 3)}"
+        result: Dict[str, Optional[float]] = {}
+        to_fetch: List[date] = []
+        for d in days:
+            cached = _DAY_SUMMARY_CACHE.get(f"{cache_prefix}:{d.isoformat()}")
+            if cached is None:
+                to_fetch.append(d)
+            else:
+                result[d.isoformat()] = cached
+
+        def _fetch(d: date) -> Tuple[date, Optional[float]]:
+            try:
+                response = self._request_openweather(
+                    f"{self.one_call_url_v3}/day_summary",
+                    {"lat": lat, "lon": lon, "date": d.isoformat()},
+                    timeout=40,
+                )
+            except Exception as exc:
+                print(f"OpenWeather [day_summary] {d.isoformat()}: {exc}")
+                return d, None
+            if response.status_code != 200:
+                self._log_openweather_error(f"day_summary {d.isoformat()}", response)
+                return d, None
+            total = (response.json().get("precipitation") or {}).get("total")
+            return d, None if total is None else float(total)
+
+        if to_fetch:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                for d, mm in pool.map(_fetch, to_fetch):
+                    result[d.isoformat()] = mm
+                    if mm is not None and d < today:
+                        _DAY_SUMMARY_CACHE[f"{cache_prefix}:{d.isoformat()}"] = mm
+        return result
+
+    def _request_openweather(self, url: str, params: Dict, timeout: int = 10) -> requests.Response:
         if not self.api_key:
             raise ValueError("OpenWeatherMap API key not configured")
         full_params = {**params, "appid": self.api_key, "units": "metric", "lang": "fr"}
-        return requests.get(url, params=full_params, timeout=10)
+        return requests.get(url, params=full_params, timeout=timeout)
 
     def _log_openweather_error(self, label: str, response: requests.Response) -> None:
         try:
