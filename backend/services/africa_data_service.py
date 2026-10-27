@@ -3,7 +3,6 @@ Africa Data Service - Fetches meteorological data optimized for Africa
 Data sources: CHIRPS, GPM IMERG, TAMSAT
 """
 import requests
-import os
 from datetime import datetime, date as date_cls, timedelta
 import json
 import numpy as np
@@ -29,14 +28,11 @@ def _to_date(value):
 class AfricaDataService:
     """Service for fetching Africa-specific flood forecasting data"""
 
-    # Autoriser (ou non) la simulation pour combler les jours CHIRPS manquants.
-    # Peut être désactivé via CHIRPS_SIMULATE_FALLBACK=0 pour n'utiliser que du réel.
     def __init__(self):
         self.chirps_base_url = CHIRPS_BASE_URL
         self.gpm_base_url = GPM_BASE_URL
         self.earthdata_username = EARTHDATA_USERNAME
         self.earthdata_password = EARTHDATA_PASSWORD
-        self.simulate_fallback = os.getenv("CHIRPS_SIMULATE_FALLBACK", "1") != "0"
 
         self._chirps_reader = None
         if CHIRPSDailyReader is not None and RASTERIO_AVAILABLE:
@@ -49,9 +45,10 @@ class AfricaDataService:
     def get_chirps_precipitation(self, lat, lon, start_date, end_date):
         """Précipitations journalières CHIRPS RÉELLES (GeoTIFF p05, ~5 km).
 
-        Télécharge et lit les fichiers CHIRPS-2.0 global daily. Les jours non
-        publiés (latence ~3 semaines) ou en erreur sont comblés par simulation
-        si `CHIRPS_SIMULATE_FALLBACK` != 0, sinon renvoyés à 0 et signalés.
+        Chaque jour vient de la version finale si elle est publiée (~4 semaines
+        de retard), sinon de la préliminaire (~1 semaine). Un jour publié dans
+        aucune des deux est compté à 0, marqué `is_real: False` et listé dans
+        `missing_dates` : à l'appelant de le combler par une autre source.
         """
         start = _to_date(start_date)
         end = _to_date(end_date)
@@ -62,56 +59,45 @@ class AfricaDataService:
             dates.append(current_date)
             current_date += timedelta(days=1)
 
-        # Si le lecteur réel n'est pas disponible, on retombe sur la simulation.
+        series = {}
         if self._chirps_reader is None:
-            print(
-                "[CHIRPS] Lecteur réel indisponible (rasterio manquant ?) — "
-                "données simulées."
-            )
-            return self._simulate_chirps_data_range(lat, lon, start, end)
+            print("[CHIRPS] Lecteur réel indisponible (rasterio manquant ?) — aucun jour CHIRPS.")
+        else:
+            try:
+                series = self._chirps_reader.get_series_with_source(lat, lon, start, end)
+            except Exception as exc:
+                print(f"[CHIRPS] Erreur lecture {start.isoformat()} → {end.isoformat()}: {exc}")
 
         daily_precip = []
         total_precipitation = 0.0
-        real_days = 0
-        simulated_days = 0
+        final_days = 0
+        prelim_days = 0
         missing_dates = []
 
         for d in dates:
-            amount = None
-            try:
-                amount = self._chirps_reader.get_daily_precip(lat, lon, d)
-            except Exception as exc:
-                print(f"[CHIRPS] Erreur lecture {d.isoformat()}: {exc}")
-                amount = None
-
-            if amount is not None:
-                is_real = True
-                real_days += 1
-            else:
+            amount, product = series.get(d.isoformat(), (None, None))
+            if amount is None:
                 missing_dates.append(d.isoformat())
-                if self.simulate_fallback:
-                    amount = self._simulate_chirps_data(lat, lon, d)
-                    simulated_days += 1
-                else:
-                    amount = 0.0
-                is_real = False
+                amount = 0.0
+            elif product == 'final':
+                final_days += 1
+            else:
+                prelim_days += 1
 
             daily_precip.append({
                 'date': d.isoformat(),
                 'precipitation': round(float(amount), 3),
-                'is_real': is_real,
+                'is_real': product is not None,
+                'product': product,
             })
             total_precipitation += float(amount)
 
+        real_days = final_days + prelim_days
         source = 'CHIRPS'
-        if simulated_days and real_days:
-            source = 'CHIRPS (partiel: réel + simulé)'
-        elif simulated_days and not real_days:
-            source = 'CHIRPS (simulé — jours indisponibles)'
-        elif missing_dates and not real_days:
-            source = 'CHIRPS (aucune donnée réelle disponible)'
+        if missing_dates and not real_days:
+            source = 'CHIRPS (aucun jour publié)'
         elif missing_dates:
-            source = 'CHIRPS (partiel: réel + jours manquants à 0)'
+            source = 'CHIRPS (partiel: jours non publiés comptés à 0)'
 
         return {
             'source': source,
@@ -124,11 +110,12 @@ class AfricaDataService:
             ),
             'daily_data': daily_precip,
             'real_days': real_days,
-            'simulated_days': simulated_days,
+            'final_days': final_days,
+            'prelim_days': prelim_days,
             'missing_dates': missing_dates,
             'note': (
-                f'{real_days} jours réels (CHIRPS-2.0 daily p05), '
-                f'{simulated_days} simulés (latence/indispo)'
+                f'{final_days} jours CHIRPS finals, {prelim_days} préliminaires, '
+                f'{len(missing_dates)} non publiés (comptés à 0)'
             ),
         }
     
@@ -202,41 +189,6 @@ class AfricaDataService:
             'chirps': chirps_data,
             'gpm_imerg': gpm_data,
             'timestamp': datetime.now().isoformat()
-        }
-    
-    def _simulate_chirps_data(self, lat, lon, date):
-        """Simulate CHIRPS precipitation data"""
-        import random
-        # Simulate Africa rainfall patterns (seasonal)
-        month = date.month
-        # Higher rainfall in wet season (varies by region)
-        # West/Central Africa: June-September
-        # East Africa: March-May, October-December
-        if month in [6, 7, 8, 9] or (lat < 0 and month in [3, 4, 5, 10, 11, 12]):
-            base_rainfall = 3.0
-        else:
-            base_rainfall = 0.5
-        
-        return max(0, random.uniform(0, base_rainfall * 3))
-    
-    def _simulate_chirps_data_range(self, lat, lon, start_date, end_date):
-        """Simulate CHIRPS data for date range"""
-        dates = []
-        current_date = start_date
-        while current_date <= end_date:
-            dates.append(current_date)
-            current_date += timedelta(days=1)
-        
-        total = sum(self._simulate_chirps_data(lat, lon, d) for d in dates)
-        
-        return {
-            'source': 'CHIRPS (simulated)',
-            'location': {'lat': lat, 'lon': lon},
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat(),
-            'total_precipitation': total,
-            'average_daily_precipitation': total / len(dates) if dates else 0,
-            'note': 'Simulated data'
         }
     
     def _simulate_gpm_data(self, hours):
